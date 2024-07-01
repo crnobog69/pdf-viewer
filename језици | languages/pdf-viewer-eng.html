@@ -1,0 +1,270 @@
+<html>
+<head>
+<base href="https://crnobog69.github.io/">
+<title>Minimalistic Online PDF Viewer</title>
+<style>
+  body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    background-color: #000;
+    color: #00ff00;
+  }
+  header {
+    background-color: #001a00;
+    padding: 10px;
+    text-align: center;
+    border-bottom: 1px solid #00ff00;
+  }
+  h1 {
+    margin: 0;
+    font-size: 24px;
+    color: #00ff00;
+  }
+  .viewer-container {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  #file-input {
+    display: none;
+  }
+  .toolbar {
+    padding: 10px;
+    background-color: #001a00;
+    border-bottom: 1px solid #00ff00;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .toolbar button, .toolbar label {
+    background-color: #000;
+    border: 1px solid #00ff00;
+    padding: 5px 10px;
+    margin: 0 5px;
+    cursor: pointer;
+    font-size: 14px;
+    color: #00ff00;
+  }
+  .toolbar button:hover, .toolbar label:hover {
+    background-color: #003300;
+  }
+  #pdf-viewer {
+    flex-grow: 1;
+    overflow: hidden;
+    background-color: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+  }
+  #pdf-canvas {
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+  }
+  #page-navigation {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 26, 0, 0.7);
+    padding: 10px;
+    border-radius: 5px;
+    z-index: 10;
+  }
+  #page-navigation span {
+    margin: 0 10px;
+  }
+  #prev-page, #next-page {
+    background-color: #000;
+    border: 1px solid #00ff00;
+    color: #00ff00;
+    padding: 5px 10px;
+    margin: 0 5px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  #prev-page:hover, #next-page:hover {
+    background-color: #003300;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Minimalistic Online PDF Viewer</h1>
+  </header>
+  
+  <div class="viewer-container">
+    <div class="toolbar">
+      <div>
+        <label for="file-input">Open PDF</label>
+        <input type="file" id="file-input" accept=".pdf">
+        <button id="zoom-in">Zoom In</button>
+        <button id="zoom-out">Zoom Out</button>
+      </div>
+      <div>
+        <button id="download">Download</button>
+        <button id="print">Print</button>
+      </div>
+    </div>
+    
+    <div id="pdf-viewer">
+      <canvas id="pdf-canvas"></canvas>
+    </div>
+    
+    <div id="page-navigation">
+      <button id="prev-page">Previous</button>
+      <span id="page-num"></span> / <span id="page-count"></span>
+      <button id="next-page">Next</button>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.9.359/pdf.worker.min.js';
+
+    let pdfDoc = null,
+        pageNum = 1,
+        pageRendering = false,
+        pageNumPending = null,
+        scale = 1.5,
+        canvas = document.getElementById('pdf-canvas'),
+        ctx = canvas.getContext('2d');
+
+    function renderPage(num) {
+      pageRendering = true;
+      pdfDoc.getPage(num).then(function(page) {
+        let viewport = page.getViewport({scale: scale});
+        let viewerWidth = document.getElementById('pdf-viewer').clientWidth;
+        let viewerHeight = document.getElementById('pdf-viewer').clientHeight;
+        
+        
+        let scaleX = viewerWidth / viewport.width;
+        let scaleY = viewerHeight / viewport.height;
+        let fitScale = Math.min(scaleX, scaleY) * 0.9;
+        
+        viewport = page.getViewport({scale: fitScale});
+        
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+        
+        let renderContext = {
+          canvasContext: ctx,
+          viewport: viewport
+        };
+        let renderTask = page.render(renderContext);
+
+        renderTask.promise.then(function() {
+          pageRendering = false;
+          if (pageNumPending !== null) {
+            renderPage(pageNumPending);
+            pageNumPending = null;
+          }
+        });
+      });
+
+      document.getElementById('page-num').textContent = num;
+    }
+
+    function queueRenderPage(num) {
+      if (pageRendering) {
+        pageNumPending = num;
+      } else {
+        renderPage(num);
+      }
+    }
+
+    function onPrevPage() {
+      if (pageNum <= 1) {
+        return;
+      }
+      pageNum--;
+      queueRenderPage(pageNum);
+    }
+
+    function onNextPage() {
+      if (pageNum >= pdfDoc.numPages) {
+        return;
+      }
+      pageNum++;
+      queueRenderPage(pageNum);
+    }
+
+    document.getElementById('prev-page').addEventListener('click', onPrevPage);
+    document.getElementById('next-page').addEventListener('click', onNextPage);
+
+    document.getElementById('file-input').addEventListener('change', function(e) {
+      let file = e.target.files[0];
+      if (file.type !== 'application/pdf') {
+        console.error(file.name, 'is not a pdf file.')
+        return;
+      }
+      
+      let fileReader = new FileReader();
+      
+      fileReader.onload = function() {
+        let typedarray = new Uint8Array(this.result);
+
+        pdfjsLib.getDocument(typedarray).promise.then(function(pdf) {
+          pdfDoc = pdf;
+          document.getElementById('page-count').textContent = pdf.numPages;
+          renderPage(pageNum);
+        });
+      };
+      
+      fileReader.readAsArrayBuffer(file);
+    });
+
+    document.getElementById('zoom-in').addEventListener('click', function() {
+      scale /= 1.2;
+      renderPage(pageNum);
+    });
+
+    document.getElementById('zoom-out').addEventListener('click', function() {
+      scale *= 1.2;
+      renderPage(pageNum);
+    });
+
+    document.getElementById('download').addEventListener('click', function() {
+      if (pdfDoc) {
+        pdfDoc.getData().then(function(data) {
+          const blob = new Blob([data], { type: 'application/pdf' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'downloaded_document.pdf';
+          link.click();
+          URL.revokeObjectURL(link.href);
+        });
+      } else {
+        alert('Please load a PDF file first.');
+      }
+    });
+
+    document.getElementById('print').addEventListener('click', function() {
+      if (pdfDoc) {
+        pdfDoc.getData().then(function(data) {
+          const blob = new Blob([data], { type: 'application/pdf' });
+          const objectUrl = URL.createObjectURL(blob);
+          const printWindow = window.open(objectUrl, '_blank');
+          
+          printWindow.onload = function() {
+            printWindow.print();
+            URL.revokeObjectURL(objectUrl);
+          };
+        });
+      } else {
+        alert('Please load a PDF file first.');
+      }
+    });
+
+    window.addEventListener('resize', function() {
+      if (pdfDoc) {
+        renderPage(pageNum);
+      }
+    });
+  </script>
+</body>
+</html>
