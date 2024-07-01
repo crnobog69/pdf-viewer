@@ -6,7 +6,7 @@
 
 ## README на српском
 
-# Минималистички онлајн PDF прегледач 📄🔍
+# Минималистички онлајн PDF прегледач у HTML-у📄🔍
 
 - [Read in English](#readme-in-english)
 
@@ -42,7 +42,7 @@
 
 ## README in English
 
-# Minimalistic Online PDF Viewer 📄🔍
+# Minimalistic Online PDF Viewer in HTML 📄🔍
 
 - [Читај на српском](#readme-на-српском)
 
